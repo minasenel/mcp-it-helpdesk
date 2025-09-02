@@ -1,0 +1,19 @@
+default_model: "google.gemini-1.5-flash"
+
+logger:
+    level: "debug"
+    show_chat: true
+    show_tools: true
+
+mcp:
+    servers:
+        it-help-desk:
+            command: "/Users/minasenel/Desktop/mcp_test/.venv/bin/python"
+            args: ["-u", "main.py"]
+            working_directory: "/Users/minasenel/Desktop/mcp_test"
+
+agents:
+  - name: agent
+    model: "google.gemini-1.5-flash"
+    mcp_servers:
+      - it-help-desk

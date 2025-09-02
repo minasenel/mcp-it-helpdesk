@@ -1,0 +1,38 @@
+[
+  {
+    "id": "T001",
+    "name": "Ayşe Hanım, Teknik Uzman",
+    "expertise": [
+      "hardware",
+      "performance"
+    ],
+    "contact": "ayse@example.com",
+    "availability": true,
+    "current_load": 0
+  },
+  {
+    "id": "T002",
+    "name": "Mehmet Bey, Yazılım Uzmanı",
+    "expertise": [
+      "software",
+      "login",
+      "password",
+      "network"
+    ],
+    "contact": "mehmet@example.com",
+    "availability": true,
+    "current_load": 0
+  },
+  {
+    "id": "T003",
+    "name": "Elif Hanım, Ağ Uzmanı",
+    "expertise": [
+      "network",
+      "wifi",
+      "vpn"
+    ],
+    "contact": "elif@example.com",
+    "availability": true,
+    "current_load": 0
+  }
+]

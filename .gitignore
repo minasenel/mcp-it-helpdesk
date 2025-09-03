@@ -58,3 +58,22 @@ secrets.yaml
 # Temporary files
 *.tmp
 *.temp
+ 
+# Local env files
+.env.local
+.env.*.local
+.python-version
+
+# Test and coverage
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+coverage.xml
+
+# Caches
+.cache/
+
+# Databases (for upcoming Django work)
+db.sqlite3
+*.sqlite3

@@ -206,7 +206,12 @@
         'hardware','laptop','printer','keyboard','mouse','screen','display','monitor','battery','fan','disk','gpu','graphics','touchpad',
         'ekran','klavye','fare','pil','batarya','fan','disk','monitör','dokunmatik','bilgisayar'
       ];
-      const followUpHints = ['assign expert','assign me','assing expert','assing human','human expert','need further assistance','escalate','transfer to'];
+      const followUpHints = [
+        'assign expert','assign me','assign an expert','assign me an expert',
+        'assing expert','assing human','assing me','assing an expert',
+        'human expert','need further assistance','escalate','transfer to',
+        'assign to human','connect me to human','talk to human','contact an expert'
+      ];
       const isGreeting = greetings.some(g => lower.includes(g));
       const isQuestion = questions.some(q => lower.includes(q));
       const hasTech = techHints.some(t => lower.includes(t));

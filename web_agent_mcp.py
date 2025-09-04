@@ -75,7 +75,11 @@ How can I help you with a technical issue today?"""
         exit(0)
     
     # Check if it's a follow-up request for expert assistance
-    if any(phrase in message_lower for phrase in ['need further assistance', 'assign me with', 'human expert', 'assign expert', 'escalate', 'transfer to']):
+    if any(phrase in message_lower for phrase in [
+        'need further assistance', 'assign me with', 'human expert', 'assign expert', 'escalate', 'transfer to',
+        'assign me', 'assign an expert', 'assign me an expert', 'assign to human', 'connect me to human',
+        'talk to human', 'contact an expert', 'assing expert', 'assing human', 'assing me'
+    ]):
         print("🔄 Detected expert assignment request")
         
         # Try to determine the issue category from the conversation context

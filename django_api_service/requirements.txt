@@ -1,0 +1,5 @@
+Django==4.2.7
+djangorestframework==3.14.0
+django-cors-headers==4.7.0
+google-generativeai==0.8.3
+python-dotenv==1.0.0

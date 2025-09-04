@@ -1,328 +1,293 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>IT Help Desk Agent</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-
-        .chat-container {
-            width: 90%;
-            max-width: 800px;
-            height: 80vh;
-            background: white;
-            border-radius: 20px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-        }
-
-        .chat-header {
-            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-            color: white;
-            padding: 20px;
-            text-align: center;
-            font-size: 1.5em;
-            font-weight: bold;
-        }
-
-        .chat-messages {
-            flex: 1;
-            padding: 20px;
-            overflow-y: auto;
-            background: #f8f9fa;
-        }
-
-        .message {
-            margin-bottom: 15px;
-            display: flex;
-            align-items: flex-start;
-        }
-
-        .message.user {
-            justify-content: flex-end;
-        }
-
-        .message.agent {
-            justify-content: flex-start;
-        }
-
-        .message-content {
-            max-width: 70%;
-            padding: 12px 16px;
-            border-radius: 18px;
-            word-wrap: break-word;
-            line-height: 1.4;
-        }
-
-        .message.user .message-content {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border-bottom-right-radius: 4px;
-        }
-
-        .message.agent .message-content {
-            background: white;
-            color: #333;
-            border: 1px solid #e1e5e9;
-            border-bottom-left-radius: 4px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-
-        .message-avatar {
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            margin: 0 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: bold;
-            font-size: 14px;
-        }
-
-        .message.user .message-avatar {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            order: 1;
-        }
-
-        .message.agent .message-avatar {
-            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-            color: white;
-        }
-
-        .chat-input {
-            padding: 20px;
-            background: white;
-            border-top: 1px solid #e1e5e9;
-            display: flex;
-            gap: 10px;
-        }
-
-        .chat-input input {
-            flex: 1;
-            padding: 12px 16px;
-            border: 2px solid #e1e5e9;
-            border-radius: 25px;
-            font-size: 16px;
-            outline: none;
-            transition: border-color 0.3s;
-        }
-
-        .chat-input input:focus {
-            border-color: #667eea;
-        }
-
-        .chat-input button {
-            padding: 12px 24px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            border-radius: 25px;
-            font-size: 16px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: transform 0.2s;
-        }
-
-        .chat-input button:hover {
-            transform: translateY(-2px);
-        }
-
-        .chat-input button:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-            transform: none;
-        }
-
-        .status {
-            padding: 10px 20px;
-            background: #e8f5e8;
-            color: #2d5a2d;
-            text-align: center;
-            font-size: 14px;
-        }
-
-        .error {
-            padding: 10px 20px;
-            background: #ffe8e8;
-            color: #d32f2f;
-            text-align: center;
-            font-size: 14px;
-        }
-
-        .typing-indicator {
-            display: none;
-            padding: 10px 20px;
-            color: #666;
-            font-style: italic;
-        }
-
-        .typing-indicator.show {
-            display: block;
-        }
-
-        .typing-dots {
-            display: inline-block;
-            animation: typing 1.4s infinite;
-        }
-
-        @keyframes typing {
-            0%, 60%, 100% { opacity: 0.3; }
-            30% { opacity: 1; }
-        }
-
-        /* Scrollbar styling */
-        .chat-messages::-webkit-scrollbar {
-            width: 6px;
-        }
-
-        .chat-messages::-webkit-scrollbar-track {
-            background: #f1f1f1;
-        }
-
-        .chat-messages::-webkit-scrollbar-thumb {
-            background: #c1c1c1;
-            border-radius: 3px;
-        }
-
-        .chat-messages::-webkit-scrollbar-thumb:hover {
-            background: #a8a8a8;
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>IT Help Desk</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://cdn.jsdelivr.net/gh/vercel/geist-font@latest/css/geist-mono.min.css" rel="stylesheet" />
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://cdn.socket.io/4.5.4/socket.io.min.js" crossorigin="anonymous"></script>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&display=swap" />
+  <style>
+    .font-geist-mono { font-family: 'Geist Mono', monospace !important; }
+    .font-manrope { font-family: 'Manrope', ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, 'Apple Color Emoji', 'Segoe UI Emoji' !important; }
+  </style>
 </head>
-<body>
-    <div class="chat-container">
-        <div class="chat-header">
-            🤖 IT Help Desk Agent
-        </div>
-        
-        <div class="status" id="status">
-            Connecting to agent...
-        </div>
-        
-        <div class="typing-indicator" id="typingIndicator">
-            Agent is typing<span class="typing-dots">...</span>
-        </div>
-        
-        <div class="chat-messages" id="chatMessages">
-            <div class="message agent">
-                <div class="message-avatar">🤖</div>
-                <div class="message-content">
-                    Hello! I'm your IT Help Desk Agent. I can help you with technical issues, troubleshoot problems, and provide solutions. How can I assist you today?
-                </div>
-            </div>
-        </div>
-        
-        <div class="chat-input">
-            <input type="text" id="messageInput" placeholder="Type your message here..." autocomplete="off">
-            <button id="sendButton" onclick="sendMessage()">Send</button>
-        </div>
+<body class="min-h-screen bg-stone-950 text-stone-200 antialiased font-manrope">
+  <div class="relative min-h-screen">
+    <!-- Subtle background accents -->
+    <div class="pointer-events-none absolute inset-0">
+      <div class="absolute -top-24 -left-24 h-72 w-72 rounded-full blur-3xl bg-violet-500/10"></div>
+      <div class="absolute -bottom-24 -right-24 h-72 w-72 rounded-full bg-gray-300/10 blur-3xl"></div>
     </div>
 
-    <script>
-        const socket = io();
-        const chatMessages = document.getElementById('chatMessages');
-        const messageInput = document.getElementById('messageInput');
-        const sendButton = document.getElementById('sendButton');
-        const status = document.getElementById('status');
-        const typingIndicator = document.getElementById('typingIndicator');
+    <main class="relative max-w-4xl mx-auto pt-10 px-4 pb-10 flex flex-col items-center">
+      <!-- Header / Title -->
+      <section id="scene" data-shown="true" class="w-full mb-8">
+        <div class="max-w-3xl mx-auto">
+          <div class="flex gap-2 items-center">
+            <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-gray-900/60 border border-gray-700/60 shadow-md backdrop-blur-md ring-1 ring-white/5">
+              <i data-lucide="wrench" class="w-6 h-6" style="color: rgb(254, 202, 202);"></i>
+            </div>
+            <h1 class="text-[22px] text-gray-100 tracking-wide font-geist-mono font-semibold">
+              IT Help <span class="font-normal">desk</span>
+            </h1>
+          </div>
+          <p class="text-[16px] md:text-[18px] leading-snug text-gray-400 font-geist-mono text-right mt-2">
+            get solutions for hardware • software, contact with an expert
+          </p>
+        </div>
+      </section>
 
-        // Socket event listeners
-        socket.on('connect', function() {
-            status.textContent = 'Connected to IT Help Desk Agent';
-            status.className = 'status';
+      <!-- Chat Card -->
+      <div class="w-full max-w-3xl rounded-2xl border border-gray-700/60 bg-gray-900/40 backdrop-blur-xl shadow-md ring-1 ring-white/5">
+        <!-- Card Header -->
+        <div class="flex border-gray-800/60 border-b py-4 px-5 items-center justify-between">
+          <div class="flex items-center gap-3">
+            <div class="h-8 w-8 rounded-md border backdrop-blur-md flex items-center justify-center bg-violet-500/20 border-violet-500/30">
+              <i data-lucide="sparkles" class="w-6 h-6" style="color: rgb(254, 202, 202);"></i>
+            </div>
+            <div class="flex flex-col">
+              <div class="text-[18px] md:text-[20px] text-gray-100 tracking-wide font-geist-mono font-semibold">Session · 01</div>
+              <div class="text-[13px] md:text-[14px] text-gray-400 font-medium">conversation</div>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <button class="inline-flex gap-2 text-[14px] hover:text-gray-100 hover:border-gray-600 hover:bg-gray-900/60 transition-colors outline-none focus-visible:ring-2 text-gray-300 bg-gray-900/40 border-gray-700/60 border rounded-lg py-2 px-3 items-center focus-visible:ring-violet-500/50">
+              <i data-lucide="clock" class="h-4.5 w-4.5"></i>
+              History
+            </button>
+            <button class="inline-flex gap-2 text-[14px] hover:text-gray-100 hover:border-gray-600 hover:bg-gray-900/60 transition-colors outline-none focus-visible:ring-2 text-gray-300 bg-gray-900/40 border-gray-700/60 border rounded-lg py-2 px-3 items-center focus-visible:ring-violet-500/50">
+              <i data-lucide="settings" class="h-4.5 w-4.5"></i>
+              Settings
+            </button>
+          </div>
+        </div>
+
+        <!-- Status / Errors -->
+        <div id="statusBar" class="px-5 py-2 text-sm text-center text-gray-300"></div>
+
+        <!-- Messages -->
+        <div id="messages" class="max-h-[60vh] overflow-y-auto py-5 px-5 space-y-3"></div>
+
+        <!-- Divider -->
+        <div class="px-5"><div class="h-px w-full bg-gradient-to-r from-transparent via-gray-800 to-transparent"></div></div>
+
+        <!-- Composer -->
+        <form id="composer" class="flex gap-3 py-4 px-5 items-end">
+          <div class="flex-1">
+            <label for="prompt" class="sr-only">Message</label>
+            <div class="rounded-xl border border-gray-700/60 bg-gray-900/40 backdrop-blur-md shadow-inner ring-1 ring-white/5 focus-within:ring-2 transition focus-within:ring-violet-500/40 focus-within:border-violet-500/40">
+              <textarea id="prompt" rows="1" placeholder="Type your message..." class="w-full resize-none text-[15px] leading-6 placeholder-gray-400 outline-none text-gray-100 bg-transparent py-3 px-4 font-medium"></textarea>
+            </div>
+            <div class="flex gap-2 text-[13px] text-gray-400 mt-2 items-center">
+              <i data-lucide="info" class="h-4 w-4"></i>
+              Press Enter to send • Shift+Enter for a new line
+            </div>
+          </div>
+          <button type="submit" class="shrink-0 inline-flex gap-2 text-[15px] transition-colors outline-none focus-visible:ring-2 font-semibold text-white tracking-wide bg-gray-900 border rounded-xl py-3 px-4 shadow-md items-center justify-center hover:bg-violet-400 focus-visible:ring-violet-500/60 border-violet-900/20">
+            <i data-lucide="send" class="h-4.5 w-4.5"></i>
+            Send
+          </button>
+        </form>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      lucide.createIcons({ attrs: { 'stroke-width': 1.5 } });
+    });
+
+    // Existing logic preserved
+    const DJANGO_API_BASE = 'http://localhost:8000/api';
+
+    async function createIssueViaDjango(payload) {
+      try {
+        const res = await fetch(`${DJANGO_API_BASE}/issues/`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
         });
-
-        socket.on('disconnect', function() {
-            status.textContent = 'Disconnected from agent';
-            status.className = 'error';
-        });
-
-        socket.on('status', function(data) {
-            status.textContent = data.message;
-            status.className = 'status';
-        });
-
-        socket.on('error', function(data) {
-            status.textContent = 'Error: ' + data.message;
-            status.className = 'error';
-        });
-
-        socket.on('agent_response', function(data) {
-            hideTypingIndicator();
-            addMessage(data.message, 'agent');
-        });
-
-        // Message handling
-        function sendMessage() {
-            const message = messageInput.value.trim();
-            if (!message) return;
-
-            addMessage(message, 'user');
-            messageInput.value = '';
-            sendButton.disabled = true;
-            showTypingIndicator();
-
-            socket.emit('send_message', { message: message });
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(text || `HTTP ${res.status}`);
         }
+        return await res.json();
+      } catch (e) {
+        return { error: String(e) };
+      }
+    }
 
-        function addMessage(content, sender) {
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `message ${sender}`;
-            
-            const avatar = document.createElement('div');
-            avatar.className = 'message-avatar';
-            avatar.textContent = sender === 'user' ? '👤' : '🤖';
-            
-            const messageContent = document.createElement('div');
-            messageContent.className = 'message-content';
-            messageContent.textContent = content;
-            
-            messageDiv.appendChild(avatar);
-            messageDiv.appendChild(messageContent);
-            
-            chatMessages.appendChild(messageDiv);
-            chatMessages.scrollTop = chatMessages.scrollHeight;
-            
-            sendButton.disabled = false;
-        }
+    const socket = io();
+    const messages = document.getElementById('messages');
+    const composer = document.getElementById('composer');
+    const textarea = document.getElementById('prompt');
+    const statusBar = document.getElementById('statusBar');
 
-        function showTypingIndicator() {
-            typingIndicator.classList.add('show');
-            chatMessages.scrollTop = chatMessages.scrollHeight;
-        }
+    function setStatus(text, isError = false) {
+      statusBar.textContent = text || '';
+      statusBar.className = `px-5 py-2 text-sm text-center ${isError ? 'text-rose-300' : 'text-gray-300'}`;
+    }
 
-        function hideTypingIndicator() {
-            typingIndicator.classList.remove('show');
-        }
+    function appendBot(text) {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'flex items-start gap-3';
+      wrapper.innerHTML = `
+        <div class="h-8 w-8 rounded-full border border-gray-700/60 bg-gray-900/60 backdrop-blur-md flex items-center justify-center shrink-0">
+          <i data-lucide="bot" class="h-4.5 w-4.5 text-stone-300"></i>
+        </div>
+        <div class="flex-1 bg-gray-900/40 border-gray-700/60 border rounded-xl py-3 px-4 shadow-sm">
+          <p class="text-[15px] leading-relaxed text-gray-200">${escapeHtml(text)}</p>
+        </div>
+      `;
+      messages.appendChild(wrapper);
+      lucide.createIcons({ attrs: { 'stroke-width': 1.5 } });
+      messages.scrollTop = messages.scrollHeight;
+    }
 
-        // Enter key to send message
-        messageInput.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter' && !sendButton.disabled) {
-                sendMessage();
-            }
+    function appendUser(text) {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'flex gap-3 items-start justify-end';
+      wrapper.innerHTML = `
+        <div class="max-w-[80%] rounded-xl border border-indigo-500/40 bg-indigo-500/15 backdrop-blur-md px-4 py-3 shadow-sm">
+          <p class="text-[15px] leading-relaxed text-indigo-100">${escapeHtml(text)}</p>
+        </div>
+        <div class="h-8 w-8 rounded-full border border-indigo-500/40 bg-indigo-500/20 backdrop-blur-md flex items-center justify-center shrink-0">
+          <i data-lucide="user" class="h-4.5 w-4.5 text-indigo-300"></i>
+        </div>
+      `;
+      messages.appendChild(wrapper);
+      lucide.createIcons({ attrs: { 'stroke-width': 1.5 } });
+      messages.scrollTop = messages.scrollHeight;
+    }
+
+    function escapeHtml(str) {
+      return (str || '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+    }
+
+    function autoResize(el) {
+      el.style.height = 'auto';
+      el.style.height = el.scrollHeight + 'px';
+    }
+
+    textarea.addEventListener('input', () => autoResize(textarea));
+    textarea.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        composer.requestSubmit();
+      }
+    });
+
+    composer.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const value = (textarea.value || '').trim();
+      if (!value) return;
+
+      appendUser(value);
+      messages.scrollTop = messages.scrollHeight;
+      textarea.value = '';
+      autoResize(textarea);
+
+      // Preserve existing decision logic before Django create
+      const lower = value.toLowerCase();
+      const greetings = ['hello','hi','hey','selam','merhaba','good morning','good afternoon','good evening','thanks','thank you'];
+      const questions = ['how are you','what can you do','help me','who are you'];
+      const techHints = [
+        'vpn','network','wifi','wi-fi','email','outlook','gmail','password','login','access','crash','error','broken','not working','issue','problem',
+        'hardware','laptop','printer','keyboard','mouse','screen','display','monitor','battery','fan','disk','gpu','graphics','touchpad',
+        'ekran','klavye','fare','pil','batarya','fan','disk','monitör','dokunmatik','bilgisayar'
+      ];
+      const followUpHints = ['assign expert','assign me','assing expert','assing human','human expert','need further assistance','escalate','transfer to'];
+      const isGreeting = greetings.some(g => lower.includes(g));
+      const isQuestion = questions.some(q => lower.includes(q));
+      const hasTech = techHints.some(t => lower.includes(t));
+      const isFollowUp = followUpHints.some(f => lower.includes(f));
+      const isSimpleGreeting = isGreeting && !hasTech && value.split(/\s+/).length <= 3;
+      const tooShort = value.split(/\s+/).length < 3;
+      const shouldPost = !isSimpleGreeting && !isFollowUp && !isQuestion && !tooShort && hasTech;
+
+      // Category/subcategory/priority mapping (kept from previous logic)
+      let category = 'software';
+      let subcategory = 'general';
+      let priority = 'low';
+
+      if (lower.includes('vpn') || lower.includes('network') || lower.includes('wifi') || lower.includes('wi-fi')) {
+        category = 'network';
+        subcategory = lower.includes('vpn') ? 'vpn' : (lower.includes('wifi') || lower.includes('wi-fi')) ? 'wifi' : 'network';
+      } else if (lower.includes('email') || lower.includes('outlook') || lower.includes('gmail')) {
+        category = 'software';
+        subcategory = 'email';
+      } else if (lower.includes('password') || lower.includes('login') || lower.includes('access')) {
+        category = 'software';
+        subcategory = 'login';
+      } else if (
+        lower.includes('laptop') || lower.includes('printer') || lower.includes('keyboard') || lower.includes('hardware') ||
+        lower.includes('screen') || lower.includes('display') || lower.includes('monitor') || lower.includes('ekran') ||
+        lower.includes('klavye') || lower.includes('mouse') || lower.includes('fare')
+      ) {
+        category = 'hardware';
+        subcategory = 'hardware';
+      }
+
+      if (lower.includes('urgent') || lower.includes('critical') || lower.includes('emergency')) {
+        priority = 'high';
+      } else if (lower.includes('important') || lower.includes('asap')) {
+        priority = 'medium';
+      }
+
+      if (shouldPost) {
+        createIssueViaDjango({
+          employee_id: 'WEB_USER',
+          description: value,
+          category,
+          subcategory,
+          priority,
+        }).then((res) => {
+          if (res && !res.error) {
+            appendBot(`Issue created in Django: ${res.issue_id || res.id}`);
+          } else {
+            appendBot(`Issue create failed on Django: ${res?.error || 'unknown error'}`);
+          }
+        }).catch((e) => {
+          appendBot(`Issue create failed on Django: ${String(e)}`);
         });
+      } else if (isSimpleGreeting || isQuestion) {
+        appendBot('Not creating an issue for a greeting. Tell me about a technical problem to log it.');
+      } else if (isFollowUp) {
+        appendBot("Not creating a new issue for follow-up request. I'll handle your expert assignment.");
+      } else if (!hasTech || tooShort) {
+        appendBot('Not creating an issue. Please describe an IT-related problem with a bit more detail.');
+      }
 
-        // Auto-focus input
-        messageInput.focus();
-    </script>
+      // Keep existing MCP flow
+      socket.emit('send_message', { message: value });
+    });
+
+    // Socket listeners
+    socket.on('connect', function() {
+      setStatus('Connected to IT Help Desk Agent', false);
+    });
+    socket.on('disconnect', function() {
+      setStatus('Disconnected from agent', true);
+    });
+    socket.on('status', function(data) {
+      setStatus(data?.message || '', false);
+    });
+    socket.on('error', function(data) {
+      setStatus('Error: ' + (data?.message || ''), true);
+    });
+    socket.on('agent_response', function(data) {
+      appendBot(data?.message || '');
+    });
+  </script>
 </body>
 </html>

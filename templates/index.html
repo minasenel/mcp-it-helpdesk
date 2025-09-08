@@ -149,6 +149,22 @@
       messages.scrollTop = messages.scrollHeight;
     }
 
+    // Track last created issue id to enable follow-up auto assignment
+    let lastIssueId = null; // e.g., "ISS001"
+    let lastIssuePk = null; // numeric primary key from Django
+
+    function appendSuggestionButton(label, onClick) {
+      const wrap = document.createElement('div');
+      wrap.className = 'flex justify-start px-5';
+      const btn = document.createElement('button');
+      btn.className = 'mt-2 inline-flex gap-2 text-[13px] hover:text-gray-100 hover:border-gray-600 hover:bg-gray-900/60 transition-colors outline-none focus-visible:ring-2 text-gray-300 bg-gray-900/40 border-gray-700/60 border rounded-lg py-1.5 px-3 items-center focus-visible:ring-violet-500/50';
+      btn.innerText = label;
+      btn.addEventListener('click', onClick);
+      wrap.appendChild(btn);
+      messages.appendChild(wrap);
+      messages.scrollTop = messages.scrollHeight;
+    }
+
     function appendUser(text) {
       const wrapper = document.createElement('div');
       wrapper.className = 'flex gap-3 items-start justify-end';
@@ -259,6 +275,25 @@
         }).then((res) => {
           if (res && !res.error) {
             appendBot(`Issue created in Django: ${res.issue_id || res.id}`);
+            lastIssueId = res.issue_id || null;
+            lastIssuePk = (typeof res.id === 'number' ? res.id : parseInt(res.id, 10)) || null;
+            if (lastIssuePk) {
+              appendSuggestionButton('assign me a human expert', async () => {
+                try {
+                  const assignRes = await fetch(`${DJANGO_API_BASE}/issues/${lastIssuePk}/assign_expert/`, { method: 'POST' });
+                  if (assignRes.ok) {
+                    const data = await assignRes.json();
+                    appendBot(`Expert assigned for ${data.issue_id}: ${data.assignment}`);
+                  } else {
+                    appendBot('Failed to assign expert via Django.');
+                  }
+                } catch (e) {
+                  appendBot(`Error assigning expert: ${String(e)}`);
+                }
+                // still emit message to agent for conversation continuity
+                socket.emit('send_message', { message: 'assign me a human expert' });
+              });
+            }
           } else {
             appendBot(`Issue create failed on Django: ${res?.error || 'unknown error'}`);
           }
@@ -269,6 +304,22 @@
         appendBot('Not creating an issue for a greeting. Tell me about a technical problem to log it.');
       } else if (isFollowUp) {
         appendBot("Not creating a new issue for follow-up request. I'll handle your expert assignment.");
+        // If we have a last issue, auto-call Django to assign expert
+        (async () => {
+          if (lastIssuePk) {
+            try {
+              const assignRes = await fetch(`${DJANGO_API_BASE}/issues/${lastIssuePk}/assign_expert/`, { method: 'POST' });
+              if (assignRes.ok) {
+                const data = await assignRes.json();
+                appendBot(`Expert assigned for ${data.issue_id}: ${data.assignment}`);
+              } else {
+                appendBot('Failed to assign expert via Django.');
+              }
+            } catch (e) {
+              appendBot(`Error assigning expert: ${String(e)}`);
+            }
+          }
+        })();
       } else if (!hasTech || tooShort) {
         appendBot('Not creating an issue. Please describe an IT-related problem with a bit more detail.');
       }

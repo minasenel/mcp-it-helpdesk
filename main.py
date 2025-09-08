@@ -212,7 +212,7 @@ def ai_classify_issue(description: str) -> Tuple[str, str]:
         return "software", "application"
 
     # Hardware / Performance
-    if any(k in text for k in ["don", "donuyor", "yavaş", "ısın", "fan", "gürültü", "disk", "ssd", "ram", "ekran", "klavye", "mouse", "freeze", "slow", "lag"]):
+    if any(k in text for k in ["don", "donuyor", "yavaş", "ısın", "fan", "gürültü", "disk", "ssd", "ram", "ekran", "klavye", "mouse", "keyboard", "freeze", "slow", "lag"]):
         if any(k in text for k in ["don", "donuyor", "yavaş", "freeze", "slow", "lag"]):
             return "hardware", "performance"
         return "hardware", "device"

@@ -401,6 +401,16 @@ web_agent = WebAgent()
 def index():
     return render_template('index.html')
 
+@app.route('/experts') # This is the endpoint for the experts
+def experts():
+    try:
+        experts_file = os.path.join(web_agent.working_directory, 'tech_experts.json')
+        with open(experts_file, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        return app.response_class(response=json.dumps(data), mimetype='application/json')
+    except Exception as e:
+        return app.response_class(response=json.dumps({"error": str(e)}), status=500, mimetype='application/json')
+
 @app.route('/test')
 def test():
     return "Web agent is working! Go to <a href='/'>the main page</a>"

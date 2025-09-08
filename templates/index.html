@@ -97,6 +97,44 @@
     </main>
   </div>
 
+  <!-- Admin Button (fixed) -->
+  <button id="adminBtn" class="fixed right-4 bottom-4 z-30 inline-flex gap-2 text-[14px] hover:text-gray-100 hover:border-gray-600 hover:bg-gray-900/60 transition-colors outline-none focus-visible:ring-2 text-gray-300 bg-gray-900/40 border-gray-700/60 border rounded-lg py-2 px-3 items-center focus-visible:ring-violet-500/50">
+    <i data-lucide="shield" class="h-4.5 w-4.5"></i>
+    Admin
+  </button>
+
+  <!-- PIN Modal -->
+  <div id="pinModal" class="hidden fixed inset-0 z-40 flex items-center justify-center bg-black/50">
+    <div class="w-full max-w-sm rounded-xl border border-gray-700/60 bg-gray-900/80 backdrop-blur-md ring-1 ring-white/5 p-5">
+      <div class="flex items-center justify-between mb-3">
+        <div class="text-gray-100 font-geist-mono font-semibold">Enter Access Code</div>
+        <button id="pinCloseBtn" class="text-gray-400 hover:text-gray-200"><i data-lucide="x" class="h-5 w-5"></i></button>
+      </div>
+      <div class="space-y-3">
+        <input id="pinInput" type="password" inputmode="numeric" maxlength="6" placeholder="4-digit code" class="w-full rounded-lg border border-gray-700/60 bg-gray-900/40 px-3 py-2 outline-none text-gray-100 placeholder-gray-400" />
+        <div class="flex justify-end gap-2">
+          <button id="pinCancelBtn" class="inline-flex gap-2 text-[14px] text-gray-300 bg-gray-900/40 border border-gray-700/60 rounded-lg py-2 px-3 hover:bg-gray-900/60">Cancel</button>
+          <button id="pinSubmitBtn" class="inline-flex gap-2 text-[14px] text-white bg-violet-500/70 hover:bg-violet-500 rounded-lg py-2 px-3">Open</button>
+        </div>
+        <div id="pinError" class="text-sm text-rose-300 hidden">Invalid code</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right Drawer Admin Panel -->
+  <div id="adminDrawer" class="fixed inset-y-0 right-0 z-30 w-full max-w-md translate-x-full transition-transform duration-300">
+    <div class="h-full bg-gray-950/95 backdrop-blur-md border-l border-gray-700/60 ring-1 ring-white/5 flex flex-col">
+      <div class="flex items-center justify-between px-4 py-3 border-b border-gray-800/60">
+        <div class="text-gray-100 font-geist-mono font-semibold">Expert Assignments</div>
+        <div class="flex items-center gap-2">
+          <button id="adminRefreshBtn" class="inline-flex gap-2 text-[13px] text-gray-300 bg-gray-900/40 border border-gray-700/60 rounded-lg py-1.5 px-3 hover:bg-gray-900/60"><i data-lucide="refresh-ccw" class="h-4 w-4"></i> Refresh</button>
+          <button id="adminCloseBtn" class="text-gray-400 hover:text-gray-200"><i data-lucide="x" class="h-5 w-5"></i></button>
+        </div>
+      </div>
+      <div id="adminContent" class="flex-1 overflow-y-auto p-4 space-y-4"></div>
+    </div>
+  </div>
+
   <script>
     document.addEventListener('DOMContentLoaded', () => {
       lucide.createIcons({ attrs: { 'stroke-width': 1.5 } });
@@ -127,6 +165,17 @@
     const composer = document.getElementById('composer');
     const textarea = document.getElementById('prompt');
     const statusBar = document.getElementById('statusBar');
+    const adminBtn = document.getElementById('adminBtn');
+    const adminDrawer = document.getElementById('adminDrawer');
+    const adminCloseBtn = document.getElementById('adminCloseBtn');
+    const adminRefreshBtn = document.getElementById('adminRefreshBtn');
+    const adminContent = document.getElementById('adminContent');
+    const pinModal = document.getElementById('pinModal');
+    const pinInput = document.getElementById('pinInput');
+    const pinSubmitBtn = document.getElementById('pinSubmitBtn');
+    const pinCancelBtn = document.getElementById('pinCancelBtn');
+    const pinCloseBtn = document.getElementById('pinCloseBtn');
+    const pinError = document.getElementById('pinError');
 
     function setStatus(text, isError = false) {
       statusBar.textContent = text || '';
@@ -152,6 +201,7 @@
     // Track last created issue id to enable follow-up auto assignment
     let lastIssueId = null; // e.g., "ISS001"
     let lastIssuePk = null; // numeric primary key from Django
+    let adminUnlocked = false; // session-only
 
     function appendSuggestionButton(label, onClick) {
       const wrap = document.createElement('div');
@@ -327,6 +377,143 @@
       // Keep existing MCP flow
       socket.emit('send_message', { message: value });
     });
+
+    // ---------------
+    // Admin functions
+    // ---------------
+    function openPinModal() {
+      pinError.classList.add('hidden');
+      pinInput.value = '';
+      pinModal.classList.remove('hidden');
+      pinInput.focus();
+      lucide.createIcons({ attrs: { 'stroke-width': 1.5 } });
+    }
+
+    function closePinModal() {
+      pinModal.classList.add('hidden');
+    }
+
+    function openAdminDrawer() {
+      adminDrawer.classList.remove('translate-x-full');
+      lucide.createIcons({ attrs: { 'stroke-width': 1.5 } });
+      refreshAdminData();
+    }
+
+    function closeAdminDrawer() {
+      adminDrawer.classList.add('translate-x-full');
+    }
+
+    async function fetchExperts() {
+      // Prefer backend-served endpoint to avoid path issues
+      try {
+        const res = await fetch('/experts');
+        if (res.ok) return await res.json();
+      } catch {}
+      // Fallbacks
+      try {
+        const resLocal = await fetch('/tech_experts.json');
+        if (resLocal.ok) return await resLocal.json();
+      } catch {}
+      try {
+        const resStatic = await fetch('/static/tech_experts.json');
+        if (resStatic.ok) return await resStatic.json();
+      } catch {}
+      return [];
+    }
+
+    async function fetchIssues() {
+      try {
+        const res = await fetch(`${DJANGO_API_BASE}/issues/`);
+        if (!res.ok) return [];
+        return await res.json();
+      } catch {
+        return [];
+      }
+    }
+
+    function groupAssignments(experts, issues) {
+      const idToExpert = new Map();
+      for (const e of experts || []) idToExpert.set(e.id, e);
+      const byExpert = new Map();
+      for (const issue of issues || []) {
+        if ((issue.status || '').toLowerCase() !== 'assigned') continue;
+        const expId = issue.assigned_expert_id || 'UNKNOWN';
+        if (!byExpert.has(expId)) byExpert.set(expId, []);
+        byExpert.get(expId).push(issue);
+      }
+      return { idToExpert, byExpert };
+    }
+
+    function renderAdmin(assignData) {
+      const { idToExpert, byExpert } = assignData;
+      adminContent.innerHTML = '';
+      if (!byExpert.size) {
+        const empty = document.createElement('div');
+        empty.className = 'text-gray-400 text-sm';
+        empty.textContent = 'No assignments yet.';
+        adminContent.appendChild(empty);
+        return;
+      }
+      const groups = Array.from(byExpert.entries()).sort(([a],[b]) => a.localeCompare(b));
+      for (const [expertId, items] of groups) {
+        const expert = idToExpert.get(expertId);
+        const card = document.createElement('div');
+        card.className = 'border border-gray-800/60 rounded-lg bg-gray-900/40 ring-1 ring-white/5';
+        const header = document.createElement('div');
+        header.className = 'px-4 py-3 border-b border-gray-800/60 flex items-center justify-between';
+        const title = document.createElement('div');
+        title.className = 'text-gray-100 font-semibold';
+        title.textContent = expert ? `${expert.name} (${expert.id})` : `Unknown Expert (${expertId})`;
+        const sub = document.createElement('div');
+        sub.className = 'text-[12px] text-gray-400';
+        sub.textContent = expert ? (expert.contact || '') : '';
+        header.appendChild(title);
+        header.appendChild(sub);
+        const body = document.createElement('div');
+        body.className = 'p-3 space-y-2';
+        for (const it of items) {
+          const row = document.createElement('div');
+          row.className = 'rounded-md border border-gray-800/60 bg-gray-900/30 px-3 py-2';
+          row.innerHTML = `<div class="text-sm text-gray-200">${it.issue_id || `Issue-${it.id}`}: ${escapeHtml(it.description || '')}</div>
+                           <div class="text-[12px] text-gray-400">priority: ${(it.priority || '').toUpperCase()} • updated: ${escapeHtml((it.updated_at || '').toString())}</div>`;
+          body.appendChild(row);
+        }
+        card.appendChild(header);
+        card.appendChild(body);
+        adminContent.appendChild(card);
+      }
+      lucide.createIcons({ attrs: { 'stroke-width': 1.5 } });
+    }
+
+    async function refreshAdminData() {
+      const [experts, issues] = await Promise.all([fetchExperts(), fetchIssues()]);
+      renderAdmin(groupAssignments(experts, issues));
+    }
+
+    // Event bindings
+    adminBtn.addEventListener('click', () => {
+      if (adminUnlocked) {
+        openAdminDrawer();
+      } else {
+        openPinModal();
+      }
+    });
+    pinCancelBtn.addEventListener('click', closePinModal);
+    pinCloseBtn.addEventListener('click', closePinModal);
+    pinSubmitBtn.addEventListener('click', () => {
+      if ((pinInput.value || '').trim() === '1111') {
+        adminUnlocked = true;
+        closePinModal();
+        openAdminDrawer();
+      } else {
+        pinError.classList.remove('hidden');
+      }
+    });
+    pinInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') pinSubmitBtn.click();
+    });
+    adminCloseBtn.addEventListener('click', closeAdminDrawer);
+    adminRefreshBtn.addEventListener('click', refreshAdminData);
 
     // Socket listeners
     socket.on('connect', function() {

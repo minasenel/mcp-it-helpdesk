@@ -16,3 +16,15 @@ class Issue(models.Model):
 
     def __str__(self) -> str:
         return self.issue_id or f"Issue-{self.pk}"
+
+
+class Expert(models.Model):
+    id = models.CharField(max_length=16, primary_key=True)  # e.g. "T001"
+    name = models.CharField(max_length=128)
+    expertise = models.JSONField(default=list)
+    contact = models.CharField(max_length=128, blank=True, default="")
+    availability = models.BooleanField(default=True)
+    current_load = models.IntegerField(default=0)
+
+    def __str__(self) -> str:
+        return f"{self.id} - {self.name}"

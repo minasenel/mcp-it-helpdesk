@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Issue
+from .models import Issue, Expert
 import google.generativeai as genai
 import os
 from django.conf import settings
@@ -227,4 +227,9 @@ class IssueSerializer(serializers.ModelSerializer): # serializer for the Issue m
 
         return attrs
 
+
+class ExpertSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Expert
+        fields = "__all__"
 

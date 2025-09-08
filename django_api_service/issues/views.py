@@ -5,8 +5,8 @@ from rest_framework import viewsets, status
 from .models import Issue
 from .serializers import IssueSerializer
 
-MCP_DIR = os.environ.get("MCP_DIR", "/Users/minasenel/Desktop/mcp_test")
-MCP_PY = os.environ.get("MCP_PY", "/Users/minasenel/Desktop/mcp_test/.venv/bin/python")
+MCP_DIR = os.environ.get("MCP_DIR", "/Users/minasenel/Desktop/untitled folder 2/mcp-it-helpdesk")
+MCP_PY = os.environ.get("MCP_PY", "/Users/minasenel/Desktop/untitled folder 2/mcp-it-helpdesk/.venv/bin/python")
 
 def run_mcp_python(code: str, timeout: int = 20, max_output: int = 10000) -> tuple[int, str, str]:
     env = os.environ.copy()

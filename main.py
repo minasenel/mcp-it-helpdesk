@@ -6,6 +6,20 @@ from typing import List, Dict, Optional, Tuple
 import json
 import re
 
+# Try to initialize Django for expert DB access. Falls back to JSON if unavailable.
+try:
+    DJANGO_DIR = os.path.join(os.path.dirname(__file__), "django_api_service")
+    if DJANGO_DIR not in sys.path:
+        sys.path.insert(0, DJANGO_DIR)
+    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "api.settings")
+    import django  # type: ignore
+    django.setup()
+    from django.db import transaction  # type: ignore
+    from issues.models import Expert as DjangoExpert  # type: ignore
+    _DJANGO_READY = True
+except Exception:
+    _DJANGO_READY = False
+
 # MCP server for IT Help Desk & Support System
 mcp = FastMCP("IT Help Desk")
 
@@ -14,7 +28,7 @@ mcp = FastMCP("IT Help Desk")
 # -----------------------------
 BASE_DIR = os.path.dirname(__file__)
 PROBLEMS_FILE = os.path.join(BASE_DIR, "problems.txt") # C:\Users\minasenel\Desktop\mcp_test\problems.txt
-EXPERTS_FILE = os.path.join(BASE_DIR, "tech_experts.json") # C:\Users\minasenel\Desktop\mcp_test\tech_experts.json
+EXPERTS_FILE = os.path.join(BASE_DIR, "tech_experts.json") # legacy JSON (used only as fallback)
 
 
 def ensure_problems_file() -> None: # This function ensures that the problems.txt file exists
@@ -53,6 +67,16 @@ def ensure_experts_file() -> None:
         ]
         with open(EXPERTS_FILE, "w") as f:
             json.dump(seed_experts, f, ensure_ascii=False, indent=2)
+
+
+def _load_experts_from_json() -> List[Dict]:
+    if not os.path.exists(EXPERTS_FILE):
+        return []
+    try:
+        with open(EXPERTS_FILE, "r") as f:
+            return json.load(f)
+    except Exception:
+        return []
 
 
 # -----------------------------
@@ -99,8 +123,37 @@ def serialize_issue(issue: Issue) -> str: # This function serializes the issue a
 
 
 def load_experts() -> List[Dict]:
-    with open(EXPERTS_FILE, "r") as f:
-        return json.load(f)
+    """Prefer Django DB experts; fallback to legacy JSON file if Django isn't ready."""
+    if _DJANGO_READY:
+        try:
+            return [
+                {
+                    "id": e.id,
+                    "name": e.name,
+                    "expertise": list(e.expertise or []),
+                    "contact": e.contact,
+                    "availability": bool(e.availability),
+                    "current_load": int(e.current_load or 0),
+                }
+                for e in DjangoExpert.objects.all()
+            ]
+        except Exception:
+            pass
+    return _load_experts_from_json()
+
+
+def mark_expert_assigned(expert_id: str) -> None:
+    """Best-effort bump of current_load when we assign an expert (DB only)."""
+    if not _DJANGO_READY:
+        return
+    try:
+        with transaction.atomic():
+            exp = DjangoExpert.objects.select_for_update().get(id=expert_id)
+            exp.current_load = int(exp.current_load or 0) + 1
+            exp.save(update_fields=["current_load"])
+    except Exception:
+        # Silent no-op if DB not available or expert not found
+        pass
 
 
 def load_issues() -> List[Issue]:
@@ -260,6 +313,7 @@ def process_issues_impl() -> Dict[str, int]:
             if expert:
                 issue["status"] = "assigned"
                 issue["assigned_expert_id"] = expert.get("id", "")
+                mark_expert_assigned(issue["assigned_expert_id"])  # best-effort bump
             else:
                 issue["status"] = "queued"
             issue["updated_at"] = now
@@ -333,7 +387,6 @@ def process_issues() -> str:
 # Startup initialization
 # -----------------------------
 ensure_problems_file()
-ensure_experts_file()
 EXPERTS_CACHE: List[Dict] = load_experts()
 try:
     num_issues = len(load_issues())

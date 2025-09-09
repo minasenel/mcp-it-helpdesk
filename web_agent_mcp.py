@@ -5,6 +5,7 @@ import sys
 import subprocess
 import tempfile
 import time
+import requests
 from flask import Flask, render_template, request
 from flask_socketio import SocketIO, emit
 import threading
@@ -17,45 +18,90 @@ socketio = SocketIO(app, cors_allowed_origins="*")
 class WebAgent:
     def __init__(self):
         self.working_directory = os.path.dirname(__file__)
+        self.django_api_base = 'http://localhost:8000/api'
+    
+    def create_issue_in_django(self, employee_id, description, category, subcategory, priority):
+        """Create an issue in Django database"""
+        try:
+            payload = {
+                'employee_id': employee_id,
+                'description': description,
+                'category': category,
+                'subcategory': subcategory,
+                'priority': priority
+            }
+            response = requests.post(f'{self.django_api_base}/issues/', json=payload, timeout=10)
+            if response.status_code == 201:
+                data = response.json()
+                return data.get('issue_id', f"ISS{data.get('id', '000')}")
+            else:
+                print(f"Django API error: {response.status_code} - {response.text}")
+                return None
+        except Exception as e:
+            print(f"Error calling Django API: {e}")
+            return None
+    
+    def assign_expert_in_django(self, issue_id, expert_id):
+        """Assign an expert to an issue in Django database"""
+        try:
+            # First, get the issue to find its Django ID
+            issues_response = requests.get(f'{self.django_api_base}/issues/', timeout=10)
+            if issues_response.status_code == 200:
+                issues = issues_response.json()
+                django_issue = None
+                for issue in issues:
+                    if issue.get('issue_id') == issue_id:
+                        django_issue = issue
+                        break
+                
+                if django_issue:
+                    print(f"Found Django issue {django_issue['id']} for issue_id {issue_id}")
+                    # Call the assign_expert endpoint
+                    assign_response = requests.post(
+                        f'{self.django_api_base}/issues/{django_issue["id"]}/assign_expert/', 
+                        timeout=10
+                    )
+                    print(f"Assign expert response: {assign_response.status_code} - {assign_response.text}")
+                    if assign_response.status_code == 200:
+                        return assign_response.json()
+                    else:
+                        print(f"Expert assignment error: {assign_response.status_code} - {assign_response.text}")
+                        return None
+                else:
+                    print(f"Issue {issue_id} not found in Django database")
+                    return None
+            else:
+                print(f"Error fetching issues: {issues_response.status_code}")
+                return None
+        except Exception as e:
+            print(f"Error assigning expert in Django: {e}")
+            return None
     
     def process_message(self, message):
         """Process a message using the MCP tools"""
         try:
-            # Create a temporary script that will use the MCP tools
-            # Escape the message to prevent issues with quotes
-            escaped_message = message.replace('"', '\\"').replace("'", "\\'")
-            script_content = '''
-import sys
-import os
-sys.path.insert(0, "{working_dir}")
-
-# Import the MCP tools
-from main import ai_try_solve, assign_expert, add_issue, process_issues
-import json
-
-user_message = """{user_msg}"""
-
-# Try to classify the issue and solve it
-try:
-    # First, try to solve with AI
-    print("🤖 AI is analyzing your issue...")
-    
-    # First, check if this is actually a problem report or just conversation
-    message_lower = user_message.lower().strip()
-    
-    # Greeting and conversation patterns (not problems)
-    greetings = ['hello', 'hi', 'hey', 'good morning', 'good afternoon', 'good evening', 'thanks', 'thank you', 'bye', 'goodbye']
-    questions = ['how are you', 'what can you do', 'help me', 'what is this', 'who are you']
-    
-    # Check if it's just a greeting or question
-    # Only treat as greeting if it's a simple greeting without technical keywords
-    is_simple_greeting = (any(greeting in message_lower for greeting in greetings) and 
-                         len(message_lower.split()) <= 3 and
-                         not any(tech_word in message_lower for tech_word in ['vpn', 'network', 'wifi', 'email', 'password', 'login', 'crash', 'error', 'broken', 'not working', 'problem', 'issue', 'help', 'fix', 'troubleshoot']))
-    
-    if is_simple_greeting:
-        print("👋 Detected greeting/conversation, not a technical problem")
-        response = """👋 Hello! I'm your IT Help Desk Agent. 
+            # Import MCP tools directly instead of using subprocess
+            sys.path.insert(0, self.working_directory)
+            from main import ai_classify_issue, ai_try_solve, add_issue, assign_expert
+            import requests
+            
+            # Process the message directly
+            user_message = message
+            message_lower = user_message.lower().strip()
+            
+            # Use AI to classify the issue
+            category, subcategory = ai_classify_issue(user_message)
+            
+            # Check if AI classified it as a non-technical issue
+            if category == "software" and subcategory == "general" and len(message_lower.split()) <= 3:
+                greetings = ['hello', 'hi', 'hey', 'good morning', 'good afternoon', 'good evening', 'thanks', 'thank you', 'bye', 'goodbye', 'selam', 'merhaba']
+                questions = ['how are you', 'what can you do', 'help me', 'what is this', 'who are you', 'nasılsın', 'ne yapabilirsin']
+                
+                is_simple_greeting = any(greeting in message_lower for greeting in greetings)
+                is_simple_question = any(question in message_lower for question in questions)
+                
+                if is_simple_greeting or is_simple_question:
+                    return """👋 Hello! I'm your IT Help Desk Agent. 
 
 I'm here to help you with technical issues like:
 • **Hardware problems** (computer, printer, mouse, keyboard issues)
@@ -71,58 +117,69 @@ To report a technical problem, please describe:
 **Example:** "My VPN keeps disconnecting every 10 minutes and I can't access company servers."
 
 How can I help you with a technical issue today?"""
-        print(response)
-        exit(0)
-    
-    # Check if it's a follow-up request for expert assistance
-    if any(phrase in message_lower for phrase in [
-        'need further assistance', 'assign me with', 'human expert', 'assign expert', 'escalate', 'transfer to',
-        'assign me', 'assign an expert', 'assign me an expert', 'assign to human', 'connect me to human',
-        'talk to human', 'contact an expert', 'assing expert', 'assing human', 'assing me'
-    ]):
-        print("🔄 Detected expert assignment request")
-        
-        # Try to determine the issue category from the conversation context
-        # For now, we'll use a general approach and let the user specify
-        issue_category = "general"
-        issue_subcategory = "general"
-        
-        # Load experts and find the best match
-        try:
-            import json
-            experts_file = os.path.join("{working_dir}", "tech_experts.json")
-            with open(experts_file, 'r', encoding='utf-8') as f:
-                experts = json.load(f)
             
-            # Find available experts
-            available_experts = [expert for expert in experts if expert.get('availability', True)]
-            
-            if available_experts:
-                # For now, assign the first available expert
-                # In a real system, you'd match based on expertise
-                assigned_expert = available_experts[0]
-                expert_name = assigned_expert.get('name', 'Unknown Expert')
-                expert_contact = assigned_expert.get('contact', 'contact@example.com')
-                expert_skills = ', '.join(assigned_expert.get('expertise', []))
-                
-                response = """🔄 **Expert Assignment Complete**
+            # Check if it's a follow-up request for expert assistance
+            if any(phrase in message_lower for phrase in [
+                'need further assistance', 'assign me with', 'human expert', 'assign expert', 'escalate', 'transfer to',
+                'assign me', 'assign an expert', 'assign me an expert', 'assign to human', 'connect me to human',
+                'talk to human', 'contact an expert', 'assing expert', 'assing human', 'assing me'
+            ]):
+                # Load experts and find the best match
+                try:
+                    experts_file = os.path.join(self.working_directory, "tech_experts.json")
+                    with open(experts_file, 'r', encoding='utf-8') as f:
+                        experts = json.load(f)
+                    
+                    available_experts = [expert for expert in experts if expert.get('availability', True)]
+                    
+                    if available_experts:
+                        assigned_expert = available_experts[0]
+                        expert_name = assigned_expert.get('name', 'Unknown Expert')
+                        expert_contact = assigned_expert.get('contact', 'contact@example.com')
+                        expert_skills = ', '.join(assigned_expert.get('expertise', []))
+                        expert_id = assigned_expert.get('id', '')
+                        
+                        # Try to assign expert in Django for the most recent issue
+                        try:
+                            # Get the most recent issue from Django
+                            issues_response = requests.get(f'{self.django_api_base}/issues/', timeout=10)
+                            if issues_response.status_code == 200:
+                                issues = issues_response.json()
+                                if issues:
+                                    # Find the most recent issue for WEB_USER that doesn't have an expert assigned
+                                    web_user_issues = [issue for issue in issues if issue.get('employee_id') == 'WEB_USER' and not issue.get('assigned_expert_id')]
+                                    if web_user_issues:
+                                        latest_issue = max(web_user_issues, key=lambda x: x.get('created_at', ''))
+                                        print(f"Assigning expert to latest issue: {latest_issue.get('issue_id')} (Django ID: {latest_issue.get('id')})")
+                                        # Assign expert to this issue
+                                        django_result = self.assign_expert_in_django(latest_issue.get('issue_id'), expert_id)
+                                        if django_result:
+                                            print(f"✅ Expert assigned in Django: {django_result}")
+                                        else:
+                                            print("⚠️ Failed to assign expert in Django")
+                                    else:
+                                        print("No unassigned issues found for WEB_USER")
+                        except Exception as e:
+                            print(f"Error assigning expert in Django: {e}")
+                        
+                        return f"""🔄 **Expert Assignment Complete**
 
-**Assigned Expert:** """ + expert_name + """
+**Assigned Expert:** {expert_name}
 
-**Contact Information:** """ + expert_contact + """
+**Contact Information:** {expert_contact}
 
-**Expertise Areas:** """ + expert_skills + """
+**Expertise Areas:** {expert_skills}
 
 **Next Steps:**
 • Contact the expert directly using the email above
 • Mention your issue details and reference any issue ID you received
 • The expert will respond within 24 hours
 
-**Your Issue:** """ + user_message + """
+**Your Issue:** {user_message}
 
 Is there anything else I can help you with?"""
-            else:
-                response = """🔄 **Expert Assignment Request**
+                    else:
+                        return f"""🔄 **Expert Assignment Request**
 
 Unfortunately, no experts are currently available. 
 
@@ -131,16 +188,16 @@ Unfortunately, no experts are currently available.
 • Submit a detailed ticket through our support portal
 • Check back in a few hours for expert availability
 
-**Your Issue:** """ + user_message + """
+**Your Issue:** {user_message}
 
 Is there anything else I can help you with?"""
-                
-        except Exception as e:
-            response = """🔄 **Expert Assignment Request**
+                        
+                except Exception as e:
+                    return f"""🔄 **Expert Assignment Request**
 
 I understand you need further assistance with your technical issue.
 
-**Your Issue:** """ + user_message + """
+**Your Issue:** {user_message}
 
 **Next Steps:**
 • I'll assign you to a human expert who specializes in your issue type
@@ -150,14 +207,11 @@ I understand you need further assistance with your technical issue.
 **Current Status:** Your issue has been logged and is being processed.
 
 Is there anything else I can help you with while you wait for the expert?"""
-        
-        print(response)
-        exit(0)
-    
-    # Check if it's a general question about capabilities
-    if any(question in message_lower for question in questions):
-        print("❓ Detected capability question")
-        response = """🤖 I'm an IT Help Desk Agent with access to:
+            
+            # Check if it's a general question about capabilities
+            questions = ['how are you', 'what can you do', 'help me', 'what is this', 'who are you', 'nasılsın', 'ne yapabilirsin']
+            if any(question in message_lower for question in questions):
+                return """🤖 I'm an IT Help Desk Agent with access to:
 
 **Available Tools:**
 • AI-powered problem analysis
@@ -174,48 +228,12 @@ Is there anything else I can help you with while you wait for the expert?"""
 **To get help:** Describe your specific technical problem with details about what's not working, when it started, and any error messages you see.
 
 What technical issue can I help you with?"""
-        print(response)
-        exit(0)
-    
-    # Now analyze for actual technical problems
-    print("🔍 Analyzing for technical problem...")
-    
-    # Determine category and subcategory based on keywords
-    # Network issues
-    if any(word in message_lower for word in ['vpn', 'network', 'wifi', 'internet', 'connection', 'disconnect', 'connectivity', 'dropping', 'reconnecting', 'connection lost', 'anyconnect']):
-        category = "network"
-        if 'vpn' in message_lower or 'anyconnect' in message_lower:
-            subcategory = "vpn"
-        elif 'wifi' in message_lower or 'wi-fi' in message_lower:
-            subcategory = "wifi"
-        else:
-            subcategory = "network"
-    # Email issues
-    elif any(word in message_lower for word in ['email', 'mail', 'outlook', 'gmail', 'thunderbird', 'smtp', 'pop3']):
-        category = "software"
-        subcategory = "email"
-    # Login/Access issues
-    elif any(word in message_lower for word in ['password', 'login', 'access', 'account', 'credential', 'authentication', 'sign in', 'log in']):
-        category = "software"
-        subcategory = "login"
-    # Hardware issues
-    elif any(word in message_lower for word in ['hardware', 'computer', 'laptop', 'printer', 'mouse', 'keyboard', 'monitor', 'fan', 'battery', 'screen', 'display']):
-        category = "hardware"
-        subcategory = "hardware"
-    # Software issues
-    elif any(word in message_lower for word in ['crash', 'error', 'bug', 'not working', 'broken', 'freeze', 'slow', 'application', 'software', 'program', 'app']):
-        category = "software"
-        subcategory = "general"
-    # If it contains problem indicators but unclear category
-    elif any(word in message_lower for word in ['problem', 'issue', 'trouble', 'help', 'fix', 'broken', 'not working', 'cannot', 'unable']):
-        category = "software"
-        subcategory = "general"
-    else:
-        # If we can't clearly classify, ask for more details
-        print("❓ Unclear problem description, asking for clarification")
-        response = """❓ I need more details to help you effectively.
+            
+            # If AI couldn't classify it properly, ask for more details
+            if category == "software" and subcategory == "general" and len(message_lower.split()) <= 5:
+                return f"""❓ I need more details to help you effectively.
 
-Your message: \"""" + user_message + """\"
+Your message: "{user_message}"
 
 **Please provide more information:**
 • What exactly is not working?
@@ -230,85 +248,105 @@ Your message: \"""" + user_message + """\"
 • "My laptop fan is making loud noise and running slowly"
 
 Please describe your technical issue with more details so I can help you properly."""
-        print(response)
-        exit(0)
-    
-    # Determine priority
-    if any(word in message_lower for word in ['urgent', 'critical', 'emergency', 'down', 'broken']):
-        priority = "high"
-    elif any(word in message_lower for word in ['important', 'soon', 'asap']):
-        priority = "medium"
-    else:
-        priority = "low"
-    
-    print("📋 Issue classified as: " + category + "/" + subcategory + " (" + priority + " priority)")
-    
-    # Try AI solution first
-    ai_solution = ai_try_solve(user_message, category, subcategory, priority)
-    
-    if "Çözüm önerisi bulunamadı" not in ai_solution:
-        print("✅ AI found a solution!")
-        print("💡 Solution: " + ai_solution)
-        
-        # Create the issue in the system
-        issue_id = add_issue("WEB_USER", user_message, category, subcategory, priority)
-        print("📝 Issue logged: " + issue_id)
-        
-        response = """✅ **AI Solution Found!**
+            
+            # Determine priority
+            if any(word in message_lower for word in ['urgent', 'critical', 'emergency', 'down', 'broken']):
+                priority = "high"
+            elif any(word in message_lower for word in ['important', 'soon', 'asap']):
+                priority = "medium"
+            else:
+                priority = "low"
+            
+            # Try AI solution first
+            ai_solution = ai_try_solve(user_message, category, subcategory, priority)
+            
+            # Create issues in both systems in parallel
+            def create_issues():
+                # Create in MCP system
+                mcp_issue_id = add_issue("WEB_USER", user_message, category, subcategory, priority)
+                
+                # Create in Django
+                django_issue_id = self.create_issue_in_django("WEB_USER", user_message, category, subcategory, priority)
+                
+                return mcp_issue_id, django_issue_id
+            
+            # Run issue creation
+            mcp_issue_id, django_issue_id = create_issues()
+            
+            if "Çözüm önerisi bulunamadı" not in ai_solution:
+                # AI found a solution
+                response = f"""✅ **AI Solution Found!**
 
-**Issue:** """ + user_message + """
-**Category:** """ + category + "/" + subcategory + """
-**Priority:** """ + priority + """
+**Issue:** {user_message}
+**Category:** {category}/{subcategory}
+**Priority:** {priority}
 
 **Solution:**
-""" + ai_solution + """
+{ai_solution}
 
-**Issue ID:** """ + issue_id + """
-
-Is this solution helpful? If you need further assistance, I can assign you to a human expert."""
-        
-    else:
-        print("🤔 AI couldn't solve automatically, assigning expert...")
-        
-        # Create the issue in the system first
-        issue_id = add_issue("WEB_USER", user_message, category, subcategory, priority)
-        
-        # Load experts and find the best match
-        try:
-            import json
-            experts_file = os.path.join("{working_dir}", "tech_experts.json")
-            with open(experts_file, 'r', encoding='utf-8') as f:
-                experts = json.load(f)
-            
-            # Find experts with matching expertise
-            matching_experts = []
-            for expert in experts:
-                if expert.get('availability', True):
-                    expertise = expert.get('expertise', [])
-                    if (category in expertise or 
-                        subcategory in expertise or 
-                        any(skill in expertise for skill in [category, subcategory])):
-                        matching_experts.append(expert)
-            
-            if matching_experts:
-                assigned_expert = matching_experts[0]
-                expert_name = assigned_expert.get('name', 'Unknown Expert')
-                expert_contact = assigned_expert.get('contact', 'contact@example.com')
-                expert_skills = ', '.join(assigned_expert.get('expertise', []))
+**Issue ID:** {mcp_issue_id}"""
                 
-                response = """🤖 **AI Analysis Complete - Expert Assigned**
+                if django_issue_id:
+                    response += f"\n**Django Issue ID:** {django_issue_id}"
+                
+                response += "\n\nIs this solution helpful? If you need further assistance, I can assign you to a human expert."
+                
+            else:
+                # AI couldn't solve, assign expert
+                try:
+                    experts_file = os.path.join(self.working_directory, "tech_experts.json")
+                    with open(experts_file, 'r', encoding='utf-8') as f:
+                        experts = json.load(f)
+                    
+                    # Find experts with matching expertise
+                    matching_experts = []
+                    for expert in experts:
+                        if expert.get('availability', True):
+                            expertise = expert.get('expertise', [])
+                            if (category in expertise or 
+                                subcategory in expertise or 
+                                any(skill in expertise for skill in [category, subcategory])):
+                                matching_experts.append(expert)
+                    
+                    if matching_experts:
+                        assigned_expert = matching_experts[0]
+                        expert_name = assigned_expert.get('name', 'Unknown Expert')
+                        expert_contact = assigned_expert.get('contact', 'contact@example.com')
+                        expert_skills = ', '.join(assigned_expert.get('expertise', []))
+                        expert_id = assigned_expert.get('id', '')
+                        
+                        # Assign expert in Django if we have a Django issue ID
+                        if django_issue_id:
+                            try:
+                                print(f"Assigning expert {expert_id} to Django issue {django_issue_id}")
+                                django_result = self.assign_expert_in_django(django_issue_id, expert_id)
+                                if django_result:
+                                    print(f"✅ Expert assigned in Django: {django_result}")
+                                else:
+                                    print("⚠️ Failed to assign expert in Django")
+                            except Exception as e:
+                                print(f"Error assigning expert in Django: {e}")
+                        else:
+                            print("No Django issue ID available for expert assignment")
+                        
+                        response = f"""🤖 **AI Analysis Complete - Expert Assigned**
 
-**Issue:** """ + user_message + """
-**Category:** """ + category + "/" + subcategory + """
-**Priority:** """ + priority + """
+**Issue:** {user_message}
+**Category:** {category}/{subcategory}
+**Priority:** {priority}
 
 **AI Analysis:** I couldn't find an automated solution for this issue.
 
-**Assigned Expert:** """ + expert_name + """
-**Contact:** """ + expert_contact + """
-**Expertise:** """ + expert_skills + """
+**Assigned Expert:** {expert_name}
+**Contact:** {expert_contact}
+**Expertise:** {expert_skills}
 
-**Issue ID:** """ + issue_id + """
+**Issue ID:** {mcp_issue_id}"""
+                        
+                        if django_issue_id:
+                            response += f"\n**Django Issue ID:** {django_issue_id}"
+                        
+                        response += """
 
 **Next Steps:**
 • Contact the expert directly using the email above
@@ -316,80 +354,47 @@ Is this solution helpful? If you need further assistance, I can assign you to a 
 • The expert will respond within 24 hours
 
 A human expert will help you resolve this issue."""
-            else:
-                # Fallback to generic expert assignment
-                expert_assignment = assign_expert(user_message)
-                response = """🤖 **AI Analysis Complete**
-
-**Issue:** """ + user_message + """
-**Category:** """ + category + "/" + subcategory + """
-**Priority:** """ + priority + """
-
-**AI Analysis:** I couldn't find an automated solution for this issue.
-
-**Expert Assignment:** """ + expert_assignment + """
-
-**Issue ID:** """ + issue_id + """
-
-A human expert will be in touch with you soon to resolve this issue."""
-                
-        except Exception as e:
-            # Fallback to generic expert assignment
-            expert_assignment = assign_expert(user_message)
-            response = """🤖 **AI Analysis Complete**
-
-**Issue:** """ + user_message + """
-**Category:** """ + category + "/" + subcategory + """
-**Priority:** """ + priority + """
-
-**AI Analysis:** I couldn't find an automated solution for this issue.
-
-**Expert Assignment:** """ + expert_assignment + """
-
-**Issue ID:** """ + issue_id + """
-
-A human expert will be in touch with you soon to resolve this issue."""
-    
-    print(response)
-    
-except Exception as e:
-    print("❌ Error: " + str(e))
-    print("I received your message: '" + user_message + "'. I'm your IT Help Desk Agent. How can I help you today?")
-'''
-            
-            # Format the script content with the actual values
-            formatted_script = script_content.format(
-                working_dir=self.working_directory,
-                user_msg=escaped_message
-            )
-            
-            # Write the script to a temporary file
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as temp_file:
-                temp_file.write(formatted_script)
-                temp_script_path = temp_file.name
-            
-            try:
-                # Run the script
-                result = subprocess.run([sys.executable, temp_script_path], 
-                                      capture_output=True, text=True, 
-                                      cwd=self.working_directory, timeout=30)
-                
-                if result.returncode == 0:
-                    response = result.stdout.strip()
-                    if response:
-                        return response
                     else:
-                        return f"I received your message: '{message}'. I'm your IT Help Desk Agent. How can I help you today?"
-                else:
-                    error_msg = result.stderr.strip()
-                    return f"I received your message: '{message}'. I'm your IT Help Desk Agent. How can I help you today? (Note: {error_msg})"
+                        # Fallback to generic expert assignment
+                        expert_assignment = assign_expert(user_message)
+                        response = f"""🤖 **AI Analysis Complete**
+
+**Issue:** {user_message}
+**Category:** {category}/{subcategory}
+**Priority:** {priority}
+
+**AI Analysis:** I couldn't find an automated solution for this issue.
+
+**Expert Assignment:** {expert_assignment}
+
+**Issue ID:** {mcp_issue_id}"""
+                        
+                        if django_issue_id:
+                            response += f"\n**Django Issue ID:** {django_issue_id}"
+                        
+                        response += "\n\nA human expert will be in touch with you soon to resolve this issue."
+                        
+                except Exception as e:
+                    # Fallback to generic expert assignment
+                    expert_assignment = assign_expert(user_message)
+                    response = f"""🤖 **AI Analysis Complete**
+
+**Issue:** {user_message}
+**Category:** {category}/{subcategory}
+**Priority:** {priority}
+
+**AI Analysis:** I couldn't find an automated solution for this issue.
+
+**Expert Assignment:** {expert_assignment}
+
+**Issue ID:** {mcp_issue_id}"""
                     
-            finally:
-                # Clean up temp file
-                try:
-                    os.unlink(temp_script_path)
-                except:
-                    pass
+                    if django_issue_id:
+                        response += f"\n**Django Issue ID:** {django_issue_id}"
+                    
+                    response += "\n\nA human expert will be in touch with you soon to resolve this issue."
+            
+            return response
             
         except Exception as e:
             return f"Error processing message: {str(e)}"

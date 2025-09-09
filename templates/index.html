@@ -20,8 +20,8 @@
   <div class="relative min-h-screen">
     <!-- Subtle background accents -->
     <div class="pointer-events-none absolute inset-0">
-      <div class="absolute -top-24 -left-24 h-72 w-72 rounded-full blur-3xl bg-violet-500/10"></div>
-      <div class="absolute -bottom-24 -right-24 h-72 w-72 rounded-full bg-gray-300/10 blur-3xl"></div>
+      <div class="absolute -top-24 -left-24 h-72 w-72 rounded-full blur-3xl bg-violet-500/30"></div>
+      <div class="absolute -bottom-24 -right-24 h-72 w-72 rounded-full bg-gray-300/20 blur-3xl"></div>
     </div>
 
     <main class="relative max-w-4xl mx-auto pt-10 px-4 pb-10 flex flex-col items-center">
@@ -263,115 +263,22 @@
       textarea.value = '';
       autoResize(textarea);
 
-      // Preserve existing decision logic before Django create
+      // Let the backend handle all AI classification and issue creation
+      // The backend will determine if this is a technical issue and create it appropriately
+      // We'll just pass the message to the backend and let it handle everything
+      
+      // Check if this is a follow-up request for expert assistance
       const lower = value.toLowerCase();
-      const greetings = ['hello','hi','hey','selam','merhaba','good morning','good afternoon','good evening','thanks','thank you'];
-      const questions = ['how are you','what can you do','help me','who are you'];
-      const techHints = [
-        'vpn','network','wifi','wi-fi','email','outlook','gmail','password','login','access','crash','error','broken','not working','issue','problem',
-        'hardware','laptop','printer','keyboard','mouse','screen','display','monitor','battery','fan','disk','gpu','graphics','touchpad',
-        'ekran','klavye','fare','pil','batarya','fan','disk','monitör','dokunmatik','bilgisayar'
-      ];
       const followUpHints = [
         'assign expert','assign me','assign an expert','assign me an expert',
         'assing expert','assing human','assing me','assing an expert',
         'human expert','need further assistance','escalate','transfer to',
         'assign to human','connect me to human','talk to human','contact an expert'
       ];
-      const isGreeting = greetings.some(g => lower.includes(g));
-      const isQuestion = questions.some(q => lower.includes(q));
-      const hasTech = techHints.some(t => lower.includes(t));
       const isFollowUp = followUpHints.some(f => lower.includes(f));
-      const isSimpleGreeting = isGreeting && !hasTech && value.split(/\s+/).length <= 3;
-      const tooShort = value.split(/\s+/).length < 3;
-      const shouldPost = !isSimpleGreeting && !isFollowUp && !isQuestion && !tooShort && hasTech;
-
-      // Category/subcategory/priority mapping (kept from previous logic)
-      let category = 'software';
-      let subcategory = 'general';
-      let priority = 'low';
-
-      if (lower.includes('vpn') || lower.includes('network') || lower.includes('wifi') || lower.includes('wi-fi')) {
-        category = 'network';
-        subcategory = lower.includes('vpn') ? 'vpn' : (lower.includes('wifi') || lower.includes('wi-fi')) ? 'wifi' : 'network';
-      } else if (lower.includes('email') || lower.includes('outlook') || lower.includes('gmail')) {
-        category = 'software';
-        subcategory = 'email';
-      } else if (lower.includes('password') || lower.includes('login') || lower.includes('access')) {
-        category = 'software';
-        subcategory = 'login';
-      } else if (
-        lower.includes('laptop') || lower.includes('printer') || lower.includes('keyboard') || lower.includes('hardware') ||
-        lower.includes('screen') || lower.includes('display') || lower.includes('monitor') || lower.includes('ekran') ||
-        lower.includes('klavye') || lower.includes('mouse') || lower.includes('fare')
-      ) {
-        category = 'hardware';
-        subcategory = 'hardware';
-      }
-
-      if (lower.includes('urgent') || lower.includes('critical') || lower.includes('emergency')) {
-        priority = 'high';
-      } else if (lower.includes('important') || lower.includes('asap')) {
-        priority = 'medium';
-      }
-
-      if (shouldPost) {
-        createIssueViaDjango({
-          employee_id: 'WEB_USER',
-          description: value,
-          category,
-          subcategory,
-          priority,
-        }).then((res) => {
-          if (res && !res.error) {
-            appendBot(`Issue created in Django: ${res.issue_id || res.id}`);
-            lastIssueId = res.issue_id || null;
-            lastIssuePk = (typeof res.id === 'number' ? res.id : parseInt(res.id, 10)) || null;
-            if (lastIssuePk) {
-              appendSuggestionButton('assign me a human expert', async () => {
-                try {
-                  const assignRes = await fetch(`${DJANGO_API_BASE}/issues/${lastIssuePk}/assign_expert/`, { method: 'POST' });
-                  if (assignRes.ok) {
-                    const data = await assignRes.json();
-                    appendBot(`Expert assigned for ${data.issue_id}: ${data.assignment}`);
-                  } else {
-                    appendBot('Failed to assign expert via Django.');
-                  }
-                } catch (e) {
-                  appendBot(`Error assigning expert: ${String(e)}`);
-                }
-                // still emit message to agent for conversation continuity
-                socket.emit('send_message', { message: 'assign me a human expert' });
-              });
-            }
-          } else {
-            appendBot(`Issue create failed on Django: ${res?.error || 'unknown error'}`);
-          }
-        }).catch((e) => {
-          appendBot(`Issue create failed on Django: ${String(e)}`);
-        });
-      } else if (isSimpleGreeting || isQuestion) {
-        appendBot('Not creating an issue for a greeting. Tell me about a technical problem to log it.');
-      } else if (isFollowUp) {
-        appendBot("Not creating a new issue for follow-up request. I'll handle your expert assignment.");
-        // If we have a last issue, auto-call Django to assign expert
-        (async () => {
-          if (lastIssuePk) {
-            try {
-              const assignRes = await fetch(`${DJANGO_API_BASE}/issues/${lastIssuePk}/assign_expert/`, { method: 'POST' });
-              if (assignRes.ok) {
-                const data = await assignRes.json();
-                appendBot(`Expert assigned for ${data.issue_id}: ${data.assignment}`);
-              } else {
-                appendBot('Failed to assign expert via Django.');
-              }
-            } catch (e) {
-              appendBot(`Error assigning expert: ${String(e)}`);
-            }
-          }
-        })();
-      } else if (!hasTech || tooShort) {
-        appendBot('Not creating an issue. Please describe an IT-related problem with a bit more detail.');
+      
+      if (isFollowUp) {
+        appendBot("I'll handle your expert assignment request through the backend.");
       }
 
       // Keep existing MCP flow
@@ -530,6 +437,24 @@
     });
     socket.on('agent_response', function(data) {
       appendBot(data?.message || '');
+      
+      // Check if the response contains an issue ID and add expert assignment button
+      const response = data?.message || '';
+      const hasIssueId = response.includes('Issue ID:') || response.includes('Django Issue ID:');
+      const isAISolution = response.includes('AI Solution Found!');
+      const isExpertAssigned = response.includes('AI Analysis Complete');
+      const isNotExpertRequest = !response.includes('Expert Assignment Complete') && !response.includes('Expert Assignment Request');
+      
+      if ((hasIssueId || isAISolution || isExpertAssigned) && isNotExpertRequest) {
+        appendSuggestionButton('assign me a human expert', async () => {
+          try {
+            // Send expert assignment request to backend
+            socket.emit('send_message', { message: 'assign me a human expert' });
+          } catch (e) {
+            appendBot(`Error requesting expert assignment: ${String(e)}`);
+          }
+        });
+      }
     });
   </script>
 </body>

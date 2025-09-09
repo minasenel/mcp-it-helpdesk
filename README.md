@@ -2,19 +2,27 @@
 
 # 🤖 MCP IT Help Desk
 
-[![Python](https://img.shields.io/badge/Python-3.13+-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![MCP Protocol](https://img.shields.io/badge/MCP-Server-5C6BC0)](https://github.com/modelcontextprotocol)
 [![Fast Agent](https://img.shields.io/badge/Fast%20Agent-Compatible-00BFA5)](https://github.com/evalstate/fast-agent)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-AI-powered IT support: understands issues (TR/EN), suggests fixes, and routes to the right experts. Experts are stored in Django DB (JSON fallback only if Django is unavailable).
+AI-powered IT support: understands issues (TR/EN), suggests fixes, and routes to the right experts. Experts are stored in Django DB.
 
 </div>
+
+<p align="center">
+  <img src="images/api_service_breakdown.png" alt="MCP IT Help Desk architecture and Django API breakdown" width="100%" />
+  <!-- Place the diagram image at images/api_service_breakdown.png -->
+  <!-- The image illustrates overall system flow and Django API key files/routes -->
+  <!-- If rendering on GitHub Pages, ensure the relative path is correct for the site base URL. -->
+  
+</p>
 
 ---
 
 ## ✨ Features
-- **AI-Powered Classification**: Turkish + English keyword logic; optional Gemini for validation/categorization
+- **AI-Powered Classification (100% LLM)**: Turkish + English via Gemini; no heuristics
 - **Auto-Solutions**: Common hardware/software/network fixes for non-critical cases
 - **Smart Expert Assignment**: Availability + expertise + load consideration
 - **Modern Web UI**: Real-time chat via Flask + Socket.IO + Tailwind
@@ -54,9 +62,9 @@ AI-powered IT support: understands issues (TR/EN), suggests fixes, and routes to
 ## 🚀 Quick Start
 
 ### Prerequisites
-- Python 3.13+
+- Python 3.11+
 - [uv](https://docs.astral.sh/uv/) (recommended)
-- Optional: Gemini key in env (`GEMINI_API_KEY` or `GOOGLE_API_KEY`)
+- Gemini API key (required): set `GEMINI_API_KEY` or `GOOGLE_API_KEY`
 
 ### Install dependencies
 ```bash
@@ -76,13 +84,18 @@ uv run python import_experts.py  # imports tech_experts.json into DB
 # MCP (via Fast Agent)
 uv run fast-agent go --stdio "uv run python main.py"
 
-# Django API
+# Django API (serves at http://localhost:8000; root "/" returns 404 by design)
 uv run python django_api_service/manage.py runserver
+# health check: http://localhost:8000/api/health/
 
-# Web UI (Flask)
+# Web UI (Flask, serves at http://localhost:5001)
 uv run python web_agent.py
 # open http://localhost:5001
 ```
+
+Notes:
+- API routes live under `/api/` (e.g., `/api/health/`, `/api/issues/`). The root `/` returns 404 by design.
+- The web frontend at `http://localhost:5001` calls the API at `http://localhost:8000` by default.
 
 ## 🧱 Architecture
 
@@ -104,7 +117,7 @@ Web UI (Flask/Socket.IO)         Django API (REST + ORM)         MCP Server (mai
 mcp-it-helpdesk/
 ├─ main.py                     # MCP server with tools
 ├─ problems.txt                # Legacy issue store (MCP-only)
-├─ tech_experts.json           # Legacy experts (fallback only)
+├─ tech_experts.json           # Legacy sample; data is stored in Django DB
 ├─ web_agent.py                # Flask web chat
 ├─ templates/index.html        # Web UI
 ├─ django_api_service/
@@ -122,8 +135,7 @@ mcp-it-helpdesk/
 
 ### Detailed Features and Benefits
 - **Bilingual understanding (TR/EN)**: Reduces back-and-forth with users
-- **AI-assisted validation**: Gemini (optional) checks whether text is an IT ticket and categorizes it
-- **Local-first heuristics**: Works entirely offline when no API keys are present
+- **AI-first classification**: Requires Gemini key; ensures consistent, accurate categorization
 - **Human-in-the-loop**: Assign experts for high/critical cases or when AI can’t resolve
 
 ### Installation Guide (Step-by-Step)
@@ -143,19 +155,77 @@ Inside Fast Agent:
 
 ## ⚙️ Advanced Configuration
 - **Gemini model**: Set `GEMINI_MODEL` env (default: `gemini-1.5-flash`)
-- **API Keys**: `GEMINI_API_KEY` or `GOOGLE_API_KEY` (the code maps GEMINI to GOOGLE for convenience)
+- **API Keys (required)**: Provide `GEMINI_API_KEY` or `GOOGLE_API_KEY`. The app maps `GEMINI_API_KEY` to `GOOGLE_API_KEY` automatically.
 - **CORS**: `settings.py` allows `http://localhost:5001` for the web UI; adjust for production
 - **Secrets & DB**: `.gitignore` excludes local DBs and secrets; use `.env` files locally (don’t commit)
 
 ## 🧠 Design Philosophy
-- **Modular**: MCP tools encapsulate actions; Django provides validation and persistence; Web UI focuses on UX
-- **Local-first**: Heuristics and files let you prototype without cloud dependencies
-- **Single Source of Truth for Experts**: Experts live in Django DB; JSON kept only as a safety net
+- **LLM-first**: Classification and validation are fully AI-driven
+- **Single Source of Truth for Experts**: Experts live in Django DB (no runtime JSON fallback)
 
 ## 🧪 Testing Ideas
-- Unit test serializers and classification fallbacks
+- Unit test serializers and classification (LLM prompts and outputs)
 - Integration test Django actions that shell into MCP (`assign_expert`, `ai_solve`)
 - E2E test via Web UI: create issue → assign expert → verify DB state
+
+## 🐳 Docker
+
+### Official Image
+
+- Pull and run:
+```bash
+docker pull minasenel/mcp-it-helpdesk:latest
+docker run --rm --name mcp_api -p 8000:8000 \
+  -e GEMINI_API_KEY="<your_key>" \
+  minasenel/mcp-it-helpdesk:latest
+# open http://localhost:8000/api/health/
+```
+
+- If port 8000 is busy on your host, map another host port:
+```bash
+docker run --rm --name mcp_api -p 8001:8000 \
+  -e GEMINI_API_KEY="<your_key>" \
+  minasenel/mcp-it-helpdesk:latest
+# then use http://localhost:8001
+```
+
+Notes:
+- API routes live under `/api/`. The root `/` returns 404 by design.
+- The frontend typically runs at `http://localhost:5001` and talks to the API at `http://localhost:8000`.
+
+### Environment Variables
+- `GEMINI_API_KEY` or `GOOGLE_API_KEY` (required)
+- `SECRET_KEY` (recommended for production; generated if missing in dev)
+- `DJANGO_ALLOWED_HOSTS` (set domains for production)
+
+Examples:
+```bash
+docker run --rm -p 8000:8000 \
+  -e GEMINI_API_KEY="<your_key>" \
+  -e DJANGO_ALLOWED_HOSTS="localhost,127.0.0.1" \
+  -e SECRET_KEY="change-me" \
+  minasenel/mcp-it-helpdesk:latest
+```
+
+### Data Persistence
+- The image uses SQLite by default inside the container. Data will be ephemeral unless you mount a volume:
+```bash
+# Persist the Django project folder (including db.sqlite3)
+docker run --rm -p 8000:8000 \
+  -e GEMINI_API_KEY="<your_key>" \
+  -v "$PWD/django_data":/app/django_api_service \
+  minasenel/mcp-it-helpdesk:latest
+```
+
+### Build locally (optional)
+If you prefer to build from source:
+```bash
+# from repo root
+docker build -t YOUR_USERNAME/mcp-it-helpdesk:latest .
+docker run --rm -p 8000:8000 \
+  -e GEMINI_API_KEY="<your_key>" \
+  YOUR_USERNAME/mcp-it-helpdesk:latest
+```
 
 ---
 

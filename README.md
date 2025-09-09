@@ -12,7 +12,7 @@ AI-powered IT support: understands issues (TR/EN), suggests fixes, and routes to
 </div>
 
 <p align="center">
-  <img src="images/api_service_breakdown.png" alt="MCP IT Help Desk architecture and Django API breakdown" width="100%" />
+  <img src="docs/images/image.png" alt="MCP IT Help Desk architecture and Django API breakdown" width="100%" />
   <!-- Place the diagram image at images/api_service_breakdown.png -->
   <!-- The image illustrates overall system flow and Django API key files/routes -->
   <!-- If rendering on GitHub Pages, ensure the relative path is correct for the site base URL. -->

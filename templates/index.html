@@ -64,11 +64,29 @@
               <i data-lucide="clock" class="h-4.5 w-4.5"></i>
               History
             </button>
-            <button class="inline-flex gap-2 text-[14px] hover:text-gray-100 hover:border-gray-600 hover:bg-gray-900/60 transition-colors outline-none focus-visible:ring-2 text-gray-300 bg-gray-900/40 border-gray-700/60 border rounded-lg py-2 px-3 items-center focus-visible:ring-violet-500/50">
-              <i data-lucide="settings" class="h-4.5 w-4.5"></i>
-              Settings
+            <button id="promptBuilderBtn" class="inline-flex gap-2 text-[14px] hover:text-gray-100 hover:border-gray-600 hover:bg-gray-900/60 transition-colors outline-none focus-visible:ring-2 text-gray-300 bg-gray-900/40 border-gray-700/60 border rounded-lg py-2 px-3 items-center focus-visible:ring-violet-500/50">
+              <i data-lucide="wand-2" class="h-4.5 w-4.5"></i>
+              Prompt Builder
             </button>
           </div>
+        </div>
+
+        <!-- Prompt Builder Panel -->
+        <div id="promptBuilderPanel" class="hidden px-5 py-4 border-b border-gray-800/60 bg-gray-900/30">
+          <div class="flex items-center justify-between mb-3">
+            <div class="flex gap-2">
+              <button id="pbTabHardware" class="inline-flex gap-2 text-[13px] text-gray-300 bg-gray-900/30 border border-gray-700/60 rounded-lg py-1.5 px-3 hover:bg-gray-900/60">
+                <i data-lucide="cpu" class="h-4 w-4"></i>
+                Hardware
+              </button>
+              <button id="pbTabSoftware" class="inline-flex gap-2 text-[13px] text-gray-300 bg-gray-900/30 border border-gray-700/60 rounded-lg py-1.5 px-3 hover:bg-gray-900/60">
+                <i data-lucide="package" class="h-4 w-4"></i>
+                Software
+              </button>
+            </div>
+            <button id="pbClose" class="text-gray-400 hover:text-gray-200"><i data-lucide="x" class="h-5 w-5"></i></button>
+          </div>
+          <div id="pbIssues" class="grid grid-cols-1 sm:grid-cols-2 gap-2"></div>
         </div>
 
         <!-- Status / Errors -->
@@ -180,6 +198,86 @@
     const pinCancelBtn = document.getElementById('pinCancelBtn');
     const pinCloseBtn = document.getElementById('pinCloseBtn');
     const pinError = document.getElementById('pinError');
+    const promptBuilderBtn = document.getElementById('promptBuilderBtn');
+    const promptBuilderPanel = document.getElementById('promptBuilderPanel');
+    const pbTabHardware = document.getElementById('pbTabHardware');
+    const pbTabSoftware = document.getElementById('pbTabSoftware');
+    const pbIssues = document.getElementById('pbIssues');
+    const pbClose = document.getElementById('pbClose');
+
+    const PB_ISSUES = {
+      hardware: [
+        "My keyboard is not working",
+        "My mouse pointer freezes randomly",
+        "Monitor is flickering or shows no signal",
+        "Laptop won't power on",
+        "Battery drains too fast",
+        "Overheating and loud fan noise",
+        "USB ports are not detecting devices",
+        "Webcam is not detected",
+        "Headset/microphone is not working",
+        "Docking station not functioning properly"
+      ],
+      software: [
+        "Outlook cannot send or receive emails",
+        "I forgot my password or cannot login",
+        "VPN connection keeps dropping",
+        "Application crashes on startup",
+        "Software installation request",
+        "Computer is very slow after an update",
+        "Cannot print from Word/Excel",
+        "Browser not loading company sites",
+        "License activation failed",
+        "Antivirus is blocking my app"
+      ]
+    };
+
+    function renderPromptBuilder(category) {
+      pbIssues.innerHTML = '';
+      if (!category) {
+        const hint = document.createElement('div');
+        hint.className = 'text-sm text-gray-400';
+        hint.textContent = 'Choose a category to view common issues';
+        pbIssues.appendChild(hint);
+        return;
+      }
+      const list = PB_ISSUES[category] || [];
+      for (const text of list) {
+        const btn = document.createElement('button');
+        btn.className = 'text-left inline-flex gap-2 text-[13px] hover:text-gray-100 hover:border-gray-600 hover:bg-gray-900/60 transition-colors outline-none focus-visible:ring-2 text-gray-300 bg-gray-900/40 border-gray-700/60 border rounded-lg py-2 px-3 items-center focus-visible:ring-violet-500/50';
+        btn.innerHTML = `<i data-lucide="message-square" class="h-4 w-4"></i><span>${escapeHtml(text)}</span>`;
+        btn.addEventListener('click', () => {
+          appendUser(text);
+          showTyping();
+          socket.emit('send_message', { message: text });
+          promptBuilderPanel.classList.add('hidden');
+        });
+        pbIssues.appendChild(btn);
+      }
+      lucide.createIcons({ attrs: { 'stroke-width': 1.5 } });
+    }
+
+    function openPromptBuilder() {
+      promptBuilderPanel.classList.remove('hidden');
+      setActiveCategory(null);
+      renderPromptBuilder(null);
+    }
+
+    function closePromptBuilder() {
+      promptBuilderPanel.classList.add('hidden');
+    }
+
+    function setActiveCategory(category) {
+      const active = ['text-gray-200','bg-gray-900/50','opacity-100'];
+      const inactive = ['text-gray-400','bg-gray-900/30','opacity-50'];
+
+      function applyClasses(el, isActive) {
+        el.className = 'inline-flex gap-2 text-[13px] border border-gray-700/60 rounded-lg py-1.5 px-3 ' + (isActive ? active.join(' ') + ' hover:bg-gray-900/70' : inactive.join(' ') + ' hover:bg-gray-900/60');
+      }
+
+      applyClasses(pbTabHardware, category === 'hardware');
+      applyClasses(pbTabSoftware, category === 'software');
+    }
 
     function setStatus(text, isError = false) {
       statusBar.textContent = text || '';
@@ -455,6 +553,21 @@
     });
     adminCloseBtn.addEventListener('click', closeAdminDrawer);
     adminRefreshBtn.addEventListener('click', refreshAdminData);
+
+    // Prompt Builder events
+    promptBuilderBtn.addEventListener('click', () => {
+      if (promptBuilderPanel.classList.contains('hidden')) openPromptBuilder();
+      else closePromptBuilder();
+    });
+    pbClose.addEventListener('click', closePromptBuilder);
+    pbTabHardware.addEventListener('click', () => {
+      setActiveCategory('hardware');
+      renderPromptBuilder('hardware');
+    });
+    pbTabSoftware.addEventListener('click', () => {
+      setActiveCategory('software');
+      renderPromptBuilder('software');
+    });
 
     // Socket listeners
     socket.on('connect', function() {

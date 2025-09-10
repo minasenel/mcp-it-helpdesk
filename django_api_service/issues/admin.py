@@ -14,3 +14,6 @@ class IssueAdmin(admin.ModelAdmin):
     list_display = ("issue_id", "employee_id", "category", "subcategory", "priority", "status", "assigned_expert_id", "created_at")
     search_fields = ("issue_id", "employee_id", "description")
     list_filter = ("status", "priority", "category")
+    ordering = ("-created_at",)
+    list_per_page = 50
+    date_hierarchy = "created_at"
